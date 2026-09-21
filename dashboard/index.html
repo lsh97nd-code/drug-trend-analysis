@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>마약류사범 데이터 탐색 Dashboard</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">AI 데이터 분석 · 보너스 Dashboard</p>
+      <h1>국내 마약류사범 단속 추이 탐색</h1>
+      <p class="sub">2017.01~2025.12 · 대검찰청 월별 통계 기반 · 기간과 지표를 바꿔가며 탐색</p>
+    </div>
+    <div class="badge">108개월</div>
+  </header>
+
+  <main>
+    <section class="panel controls">
+      <div class="control">
+        <label for="preset">기간 빠른 선택</label>
+        <select id="preset">
+          <option value="all">전체 2017~2025</option>
+          <option value="pre">코로나 이전 2017~2019</option>
+          <option value="covid">유행·제약 2020~2022</option>
+          <option value="post">이후 2023~2025</option>
+        </select>
+      </div>
+      <div class="control"><label for="start">시작 월</label><select id="start"></select></div>
+      <div class="control"><label for="end">종료 월</label><select id="end"></select></div>
+      <div class="control">
+        <label for="series">분석 지표</label>
+        <select id="series">
+          <option value="total">전체 단속인원</option>
+          <option value="psychotropics">향정신성의약품</option>
+          <option value="cannabis">대마</option>
+          <option value="narcotics">마약</option>
+        </select>
+      </div>
+      <label class="check"><input id="maToggle" type="checkbox" checked /> 12개월 이동평균 표시</label>
+      <button id="reset" type="button">초기화</button>
+    </section>
+
+    <section class="kpis">
+      <article class="kpi"><span>선택 기간</span><strong id="kPeriod">-</strong></article>
+      <article class="kpi"><span>데이터 포인트</span><strong id="kCount">-</strong></article>
+      <article class="kpi"><span>월평균</span><strong id="kAvg">-</strong></article>
+      <article class="kpi"><span>최고 월</span><strong id="kMax">-</strong></article>
+    </section>
+
+    <section class="grid2">
+      <article class="panel chart-panel">
+        <div class="section-head"><div><h2>월별 추이</h2><p id="seriesDesc"></p></div><span class="hint">마우스를 올리면 값 표시</span></div>
+        <div id="lineChart" class="chart"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="section-head"><div><h2>달력 월별 평균</h2><p>선택 기간 안에서 1~12월 평균 비교</p></div></div>
+        <div id="monthChart" class="chart compact"></div>
+      </article>
+    </section>
+
+    <section class="grid2">
+      <article class="panel">
+        <div class="section-head"><div><h2>높은 값 Top 5</h2><p>현재 필터 기준</p></div></div>
+        <div id="topTable"></div>
+      </article>
+      <article class="panel">
+        <div class="section-head"><div><h2>범죄 유형 구성</h2><p>연간 자료가 있는 가장 최근 연도 표시</p></div><select id="offenseYear"></select></div>
+        <div id="offenseChart" class="chart compact"></div>
+        <p id="offenseNote" class="note"></p>
+      </article>
+    </section>
+
+    <section class="panel interpretation">
+      <h2>읽는 방법</h2>
+      <p id="interpretation"></p>
+      <p class="warning">※ 단속인원 증가는 실제 사용 인구 증가와 동일하지 않습니다. 수사·단속 정책, 적발 역량, 사회적 환경 등의 영향도 받을 수 있습니다.</p>
+    </section>
+  </main>
+
+  <footer>공공기관 통계 기반 학습용 분석 Dashboard · 투자/의료 조언 목적 아님</footer>
+  <div id="tooltip" class="tooltip" hidden></div>
+  <script src="./data.js"></script>
+  <script src="./script.js"></script>
+</body>
+</html>
