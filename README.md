@@ -6,6 +6,7 @@
 
 - **상세 분석 보고서:** [REPORT.md](./REPORT.md)
 - **데이터 추출·검증 기록:** [DATA_EXTRACTION_NOTES.md](./DATA_EXTRACTION_NOTES.md)
+- **과제 안내 + 제출 부록 PDF:** [AI 데이터 분석 과제 제출본](./output/pdf/AI_데이터_분석_과제_제출본.pdf)
 - **Dashboard:** [`dashboard/index.html`](./dashboard/index.html)
 - **GitHub Pages 배포용 정적 파일:** [`docs/`](./docs/)
 
@@ -31,6 +32,7 @@
 3. 전체 단속인원 169,416명 중 향정신성의약품 단속인원은 123,969명으로 약 **73.2%**를 차지했습니다.
 4. IQR 기준 이상치 후보는 2019-05, 2023-07, 2023-08, 2025-07이지만, 실제 사건·단속 변화일 수 있어 **자동 삭제하지 않았습니다.**
 5. 시계열 분해에서는 7월의 계절 효과가 높게 추정되었지만, 2023년 7~8월은 계절성을 제거한 뒤에도 큰 잔차가 남아 **단순 계절성만으로 설명하기 어렵다**고 판단했습니다.
+6. 마약범죄 특별수사본부 출범 월인 2023년 4월을 제외하고 직전·직후 12개월을 비교하면 전체 단속인원 월평균은 **1,620.2명에서 2,403.7명으로 48.4% 증가**했습니다. 7·8월을 양쪽에서 제외해도 나머지 10개월의 월평균은 32.5% 증가했지만, 이 차이는 정책 효과의 인과 추정이 아닌 관찰값입니다.
 
 자세한 Fact–Why–Action 해석은 [REPORT.md](./REPORT.md)에 정리했습니다.
 
@@ -45,6 +47,8 @@ drug-trend-analysis/
 ├── build_dataset.py
 ├── analysis.py
 ├── requirements.txt
+├── tests/                 # Python unittest + Node node:test
+├── output/pdf/            # 과제 안내와 제출 부록을 합친 PDF
 │
 ├── data/
 │   └── processed/
@@ -71,6 +75,8 @@ drug-trend-analysis/
 ├── dashboard/
 │   ├── index.html
 │   ├── style.css
+│   ├── core.js
+│   ├── comparison.js
 │   ├── script.js
 │   ├── data.js
 │   └── README.md
@@ -78,6 +84,8 @@ drug-trend-analysis/
 └── docs/                 # GitHub Pages 배포용 Dashboard 복사본
     ├── index.html
     ├── style.css
+    ├── core.js
+    ├── comparison.js
     ├── script.js
     └── data.js
 ```
@@ -139,6 +147,23 @@ IQR 이상치 후보: [('2019-05', 3091), ('2023-07', 4220), ('2023-08', 3715), 
 기본 그래프 7개 + 시계열 분해 그래프 4개 생성 완료: images/
 ```
 
+### 5-3. 입력 데이터만 검증
+
+그래프나 결과 파일을 만들지 않고 두 CSV의 스키마·값·기간·합계만 검사할 수 있습니다.
+
+```bash
+python analysis.py --validate-only
+```
+
+### 5-4. 자동 테스트
+
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+node --test
+```
+
+현재 회귀 테스트는 Python 15개와 Node 14개, 총 29개입니다. `dashboard/`와 `docs/`의 실행 자산 동일성도 Node 테스트에서 확인합니다.
+
 ## 6. 데이터 정제·검증 기준
 
 원본은 2017년 1월부터 2025년 12월까지의 월별 PDF 108개입니다. 월별 값과 누계값이 함께 있는 자료는 **해당 월의 값만 사용**했습니다.
@@ -151,6 +176,7 @@ IQR 이상치 후보: [('2019-05', 3091), ('2023-07', 4220), ('2023-08', 3715), 
 - 월별 종류 합계 검증: **108개월 모두 일치**
 - 2019년 월별 합계와 공식 연간 누계: **2명 차이** → 임의 수정하지 않고 기록
 - 2018년 범죄 유형별 자료: 원자료 내부 불일치 → 추정하지 않고 결측 유지
+- CSV 필수 열, 정수·비음수, `date-year-month` 일치, 날짜 정렬, 월 연속성, 연도 집합과 연간 합계를 실행 전에 검증
 
 자세한 추출·검증 과정은 [DATA_EXTRACTION_NOTES.md](./DATA_EXTRACTION_NOTES.md)를 참고합니다.
 
@@ -221,6 +247,10 @@ dashboard/index.html
 - 달력 월별 평균 비교
 - 현재 조건 Top 5 확인
 - 연도별 범죄 유형 구성비 확인
+- 특별수사본부 출범 전후 12개월 비교와 7·8월 제외 민감도 확인
+- 선택 기간 7개 열 CSV 다운로드
+- 필터 상태 URL 저장·복원과 초기화
+- 키보드 차트 탐색, 모바일 내부 스크롤, 데이터 로드 실패 안내
 
 ### 실행
 
@@ -285,7 +315,8 @@ AI가 제시한 사건·원인·수치는 그대로 결론으로 사용하지 �
 - [x] 분석 질문 3개 이상
 - [x] 시계열 분석 기법 2개 이상
 - [x] 시각화 2개 이상 — 기본 7개
-- [x] 인사이트 3개 이상 — REPORT에 Fact–Why–Action 5개
+- [x] 인사이트 3개 이상 — REPORT에 Fact–Why–Action 6개
+- [x] 특별수사본부 출범 전후 추가 분석과 인과 해석의 한계 명시
 - [x] 결측치·이상치 처리 기준 설명
 - [x] AI 사용 로그
 - [x] `requirements.txt`
@@ -293,14 +324,15 @@ AI가 제시한 사건·원인·수치는 그대로 결론으로 사용하지 �
 - [x] 데이터 출처·수집 방법
 - [x] 보너스 시계열 분해
 - [x] 보너스 Dashboard 구현
+- [x] 과제 안내와 제출 결과 부록을 합친 PDF 생성
+- [x] GitHub 저장소 URL 입력
 - [ ] Dashboard 보너스 제출 증빙 완료 — GitHub Pages URL 또는 시연 영상/스크린샷 세트 중 1개
 - [ ] GitHub Pages 실제 배포 URL 입력
-- [ ] GitHub 저장소 URL 입력
 
 ## 13. 프로젝트 URL
 
-- GitHub 저장소: `✍️ 업로드 후 입력`
-- Dashboard URL: `✍️ GitHub Pages 배포 후 입력`
+- GitHub 저장소: https://github.com/lsh97nd-code/drug-trend-analysis
+- Dashboard URL: GitHub Pages가 아직 설정되지 않았습니다. `main /docs`를 배포 소스로 지정한 뒤 기록합니다.
 
 ---
 

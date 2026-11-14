@@ -1,22 +1,240 @@
-(() => {
-const data=window.MONTHLY_DATA, offense=window.OFFENSE_DATA;
-const start=document.querySelector('#start'),end=document.querySelector('#end'),series=document.querySelector('#series'),preset=document.querySelector('#preset'),maToggle=document.querySelector('#maToggle');
-const seriesLabel={total:'전체 단속인원',psychotropics:'향정신성의약품',cannabis:'대마',narcotics:'마약'};
-const nf=new Intl.NumberFormat('ko-KR',{maximumFractionDigits:1});
-const dates=data.map(d=>d.date);
-for(const d of dates){start.add(new Option(d,d));end.add(new Option(d,d));}
-start.value=dates[0]; end.value=dates.at(-1);
-const years=[...new Set(offense.map(d=>d.year))]; const oy=document.querySelector('#offenseYear');
-for(const y of years){oy.add(new Option(y,y));} oy.value=years.at(-1);
-const params=new URLSearchParams(location.search); if(params.get('start')&&dates.includes(params.get('start')))start.value=params.get('start'); if(params.get('end')&&dates.includes(params.get('end')))end.value=params.get('end'); if(params.get('type')&&seriesLabel[params.get('type')])series.value=params.get('type');
-function subset(){let a=dates.indexOf(start.value),b=dates.indexOf(end.value); if(a>b){[a,b]=[b,a];} return data.slice(a,b+1);}
-function mean(a){return a.reduce((s,v)=>s+v,0)/a.length}
-function moving(a,w=12){return a.map((_,i)=>i<w-1?null:mean(a.slice(i-w+1,i+1)))}
-function svgLine(el,rows,key){const W=900,H=360,p={l:58,r:18,t:18,b:44}; const vals=rows.map(d=>d[key]); const ma=moving(vals); const max=Math.max(...vals,...ma.filter(v=>v!=null))*1.08,min=0; const x=i=>p.l+i*(W-p.l-p.r)/Math.max(1,rows.length-1); const y=v=>p.t+(max-v)*(H-p.t-p.b)/(max-min); let s=`<svg viewBox="0 0 ${W} ${H}" role="img">`; for(let i=0;i<=4;i++){const yy=p.t+i*(H-p.t-p.b)/4;const v=max-i*(max-min)/4;s+=`<line class="grid" x1="${p.l}" y1="${yy}" x2="${W-p.r}" y2="${yy}"/><text class="label" x="${p.l-8}" y="${yy+4}" text-anchor="end">${Math.round(v).toLocaleString()}</text>`;} const pts=vals.map((v,i)=>`${x(i)},${y(v)}`).join(' '); s+=`<polyline class="line-main" points="${pts}"/>`; if(maToggle.checked){const mp=ma.map((v,i)=>v==null?null:`${x(i)},${y(v)}`).filter(Boolean).join(' ');s+=`<polyline class="line-ma" points="${mp}"/>`;} const labelIdx=[0,Math.floor((rows.length-1)/2),rows.length-1]; for(const i of [...new Set(labelIdx)])s+=`<text class="label" x="${x(i)}" y="${H-12}" text-anchor="middle">${rows[i].date}</text>`; vals.forEach((v,i)=>{s+=`<circle class="dot hover-dot" data-i="${i}" cx="${x(i)}" cy="${y(v)}" r="3" opacity="0.15"/>`;}); s+='</svg>';el.innerHTML=s; el.querySelectorAll('.hover-dot').forEach(c=>c.addEventListener('mousemove',e=>showTip(e,`${rows[+c.dataset.i].date} · ${seriesLabel[key]} ${nf.format(vals[+c.dataset.i])}명`))); el.querySelectorAll('.hover-dot').forEach(c=>c.addEventListener('mouseleave',hideTip));}
-function svgBars(el,labels,vals){const W=620,H=310,p={l:42,r:14,t:18,b:48};const max=Math.max(...vals)*1.12;const bw=(W-p.l-p.r)/vals.length*.7,g=(W-p.l-p.r)/vals.length;let s=`<svg viewBox="0 0 ${W} ${H}">`;for(let i=0;i<=4;i++){const yy=p.t+i*(H-p.t-p.b)/4;s+=`<line class="grid" x1="${p.l}" y1="${yy}" x2="${W-p.r}" y2="${yy}"/>`;}vals.forEach((v,i)=>{const h=v/max*(H-p.t-p.b),xx=p.l+i*g+(g-bw)/2,yy=H-p.b-h;s+=`<rect class="bar monthbar" data-i="${i}" x="${xx}" y="${yy}" width="${bw}" height="${h}" rx="3"/><text class="label" x="${xx+bw/2}" y="${H-24}" text-anchor="middle">${labels[i]}</text>`;});s+='</svg>';el.innerHTML=s;el.querySelectorAll('.monthbar').forEach(b=>b.addEventListener('mousemove',e=>showTip(e,`${labels[+b.dataset.i]} 평균 ${nf.format(vals[+b.dataset.i])}명`)));el.querySelectorAll('.monthbar').forEach(b=>b.addEventListener('mouseleave',hideTip));}
-function offenseChart(){const r=offense.find(d=>d.year==+oy.value);const keys=[['manufacture','밀조'],['smuggling','밀수'],['dealing','밀매'],['illegal_cultivation','밀경'],['use','투약'],['possession','소지'],['other','기타']];const el=document.querySelector('#offenseChart'); if(r.manufacture==null){el.innerHTML='<p class="note">이 연도는 원자료 불일치로 유형별 세부 값을 사용하지 않았습니다.</p>';return;} const vals=keys.map(([k])=>r[k]); const total=vals.reduce((a,b)=>a+b,0); const W=640,H=260;let x=20,s=`<svg viewBox="0 0 ${W} ${H}">`; vals.forEach((v,i)=>{const w=v/total*(W-40);s+=`<rect class="segment" data-i="${i}" x="${x}" y="75" width="${Math.max(w,1)}" height="70" rx="2" fill="hsl(${210+i*23} 65% ${48+i*3}%)"/>`;x+=w;}); keys.forEach(([k,l],i)=>{const col=i%4,row=Math.floor(i/4),xx=25+col*150,yy=188+row*27;s+=`<rect x="${xx}" y="${yy-10}" width="12" height="12" fill="hsl(${210+i*23} 65% ${48+i*3}%)"/><text class="label" x="${xx+18}" y="${yy}">${l} ${((vals[i]/total)*100).toFixed(1)}%</text>`;});s+='</svg>';el.innerHTML=s;document.querySelector('#offenseNote').textContent=`${r.year}년 합계 ${r.total.toLocaleString()}명 기준`; el.querySelectorAll('.segment').forEach(b=>b.addEventListener('mousemove',e=>{const i=+b.dataset.i;showTip(e,`${keys[i][1]} ${vals[i].toLocaleString()}명 · ${(vals[i]/total*100).toFixed(1)}%`)}));el.querySelectorAll('.segment').forEach(b=>b.addEventListener('mouseleave',hideTip));}
-function showTip(e,t){const tip=document.querySelector('#tooltip');tip.hidden=false;tip.textContent=t;tip.style.left=(e.clientX+12)+'px';tip.style.top=(e.clientY+12)+'px'} function hideTip(){document.querySelector('#tooltip').hidden=true}
-function update(){const rows=subset(),key=series.value,vals=rows.map(d=>d[key]);document.querySelector('#kPeriod').textContent=`${rows[0].date} ~ ${rows.at(-1).date}`;document.querySelector('#kCount').textContent=`${rows.length}개월`;document.querySelector('#kAvg').textContent=`${nf.format(mean(vals))}명`;const im=vals.indexOf(Math.max(...vals));document.querySelector('#kMax').textContent=`${rows[im].date} · ${vals[im].toLocaleString()}명`;document.querySelector('#seriesDesc').textContent=`${seriesLabel[key]} · 선택 기간 ${rows.length}개월`;svgLine(document.querySelector('#lineChart'),rows,key);const monthVals=[];for(let m=1;m<=12;m++){const v=rows.filter(d=>d.month===m).map(d=>d[key]);monthVals.push(v.length?mean(v):0);}svgBars(document.querySelector('#monthChart'),Array.from({length:12},(_,i)=>`${i+1}월`),monthVals);const top=[...rows].sort((a,b)=>b[key]-a[key]).slice(0,5);document.querySelector('#topTable').innerHTML=`<table class="table"><thead><tr><th>순위</th><th>월</th><th>${seriesLabel[key]}</th></tr></thead><tbody>${top.map((r,i)=>`<tr><td>${i+1}</td><td>${r.date}</td><td>${r[key].toLocaleString()}명</td></tr>`).join('')}</tbody></table>`;const first=vals[0],last=vals.at(-1),delta=(last-first)/first*100;document.querySelector('#interpretation').textContent=`현재 선택 구간의 ${seriesLabel[key]} 월평균은 ${nf.format(mean(vals))}명입니다. 시작 월 대비 종료 월은 ${delta>=0?'+':''}${delta.toFixed(1)}%입니다. 최고 월은 ${rows[im].date}입니다. 이 변화는 관찰값이며 특정 사건이나 정책의 직접 효과로 단정하지 않습니다.`;}
-function presetSet(v){const m={all:[dates[0],dates.at(-1)],pre:['2017-01','2019-12'],covid:['2020-01','2022-12'],post:['2023-01','2025-12']}[v];start.value=m[0];end.value=m[1];update()}
-preset.addEventListener('change',()=>presetSet(preset.value)); [start,end,series,maToggle].forEach(el=>el.addEventListener('change',update)); oy.addEventListener('change',offenseChart); document.querySelector('#reset').addEventListener('click',()=>{preset.value='all';series.value='total';maToggle.checked=true;presetSet('all')}); update();offenseChart();
+(function dashboard() {
+  'use strict';
+
+  const find = (id) => document.getElementById(id);
+  const core = window.DrugTrendCore;
+  let data, offense;
+  try {
+    data = core.validateMonthlyData(window.MONTHLY_DATA);
+    offense = core.validateOffenseData(window.OFFENSE_DATA);
+  } catch (error) {
+    find('dashboardContent').hidden = true;
+    find('loadError').hidden = false;
+    console.error('대시보드 데이터 로드 실패', error);
+    return;
+  }
+
+  const dates = data.map((row) => row.date);
+  const years = offense.map((row) => row.year).sort((a, b) => a - b);
+  const ranges = core.presetRanges(dates);
+  const defaults = {
+    start: dates[0], end: dates.at(-1), type: 'total', ma: true, year: years.at(-1),
+  };
+  const labels = {
+    total: '전체 단속인원', psychotropics: '향정신성의약품', cannabis: '대마', narcotics: '마약',
+  };
+  const offenseLabels = ['밀조', '밀수', '밀매', '밀경', '투약', '소지', '기타'];
+  const number = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
+  const format = (value) => number.format(value);
+  const start = find('start'), end = find('end'), preset = find('preset');
+  const series = find('series'), maToggle = find('maToggle'), offenseYear = find('offenseYear');
+  const tooltip = find('tooltip');
+
+  for (const date of dates) {
+    start.add(new Option(date, date));
+    end.add(new Option(date, date));
+  }
+  for (const year of years) offenseYear.add(new Option(year, year));
+  for (const option of preset.options) option.disabled = !Object.hasOwn(ranges, option.value);
+
+  function hideTip() {
+    tooltip.hidden = true;
+  }
+
+  function showTip(mark, x, y) {
+    tooltip.textContent = mark.getAttribute('aria-label');
+    tooltip.hidden = false;
+    tooltip.style.left = `${Math.max(0, Math.min(x + 10, innerWidth - tooltip.offsetWidth - 4))}px`;
+    tooltip.style.top = `${Math.max(0, Math.min(y + 10, innerHeight - tooltip.offsetHeight - 4))}px`;
+  }
+
+  // Each chart occupies one tab stop. Arrow keys move through its individual observations.
+  function mountChart(container, title, width, height, content) {
+    container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="group" aria-label="${title}">${content}</svg>`;
+    const marks = [...container.querySelectorAll('[data-tip]')];
+    for (const [index, mark] of marks.entries()) {
+      mark.setAttribute('tabindex', index === 0 ? '0' : '-1');
+      mark.addEventListener('pointermove', (event) => showTip(mark, event.clientX, event.clientY));
+      mark.addEventListener('pointerleave', hideTip);
+      mark.addEventListener('focus', () => {
+        for (const point of marks) point.setAttribute('tabindex', point === mark ? '0' : '-1');
+        const box = mark.getBoundingClientRect();
+        showTip(mark, box.x + box.width / 2, box.y + box.height / 2);
+      });
+      mark.addEventListener('blur', hideTip);
+      mark.addEventListener('keydown', (event) => {
+        const targets = {
+          ArrowLeft: Math.max(0, index - 1), ArrowRight: Math.min(index + 1, marks.length - 1),
+          Home: 0, End: marks.length - 1,
+        };
+        if (Object.hasOwn(targets, event.key)) {
+          event.preventDefault();
+          marks[targets[event.key]].focus();
+        }
+      });
+    }
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') hideTip();
+  });
+
+  function markAttributes(tip) {
+    // Labels consist of validated dates, formatted numbers and fixed Korean terms.
+    return `data-tip="" role="img" aria-label="${tip}"`;
+  }
+
+  function lineChart(rows, key) {
+    const width = 900, height = 360, left = 58, right = 24, top = 18, bottom = 44;
+    const values = rows.map((row) => row[key]);
+    const averages = core.movingAverage(values);
+    const max = Math.max(1, ...values) * 1.08;
+    const plotWidth = width - right - left, plotHeight = height - bottom - top;
+    const x = (i) => rows.length > 1 ? left + i * plotWidth / (rows.length - 1) : left + plotWidth / 2;
+    const y = (value) => top + (1 - value / max) * plotHeight;
+    const chart = [];
+    for (let i = 0; i <= 4; i++) {
+      const yy = top + i * plotHeight / 4;
+      chart.push(`<line class="grid" x1="${left}" y1="${yy}" x2="${width - right}" y2="${yy}"/>
+        <text class="label" x="${left - 8}" y="${yy + 4}" text-anchor="end">${format(Math.round(max * (1 - i / 4)))}</text>`);
+    }
+    const points = values.map((value, i) => `${x(i)},${y(value)}`).join(' ');
+    chart.push(`<polyline class="line-main" points="${points}"/>`);
+    if (maToggle.checked) {
+      const points = averages.flatMap((value, i) => value === null ? [] : [`${x(i)},${y(value)}`]);
+      if (points.length === 1) {
+        chart.push(`<circle class="line-ma" cx="${x(11)}" cy="${y(averages[11])}" r="3"/>`);
+      } else if (points.length > 1) {
+        chart.push(`<polyline class="line-ma" points="${points.join(' ')}"/>`);
+      }
+    }
+    for (const i of new Set([0, Math.floor((rows.length - 1) / 2), rows.length - 1])) {
+      chart.push(`<text class="label" x="${x(i)}" y="${height - 12}" text-anchor="middle">${rows[i].date}</text>`);
+    }
+    values.forEach((value, i) => {
+      const tip = `${rows[i].date} · ${labels[key]} ${format(value)}명`;
+      chart.push(`<circle class="dot hover-dot" ${markAttributes(tip)} cx="${x(i)}" cy="${y(value)}" r="${rows.length === 1 ? 5 : 3}"/>`);
+    });
+    mountChart(find('lineChart'), `${labels[key]} 월별 추이`, width, height, chart.join(''));
+  }
+
+  function monthChart(rows, key) {
+    const months = core.calendarMonthAverages(rows, key);
+    const width = 620, height = 310, left = 42, right = 14, bottom = 48, top = 18;
+    const slot = (width - left - right) / 12, barWidth = slot * 0.7;
+    const max = Math.max(1, ...months.map((item) => item.value ?? 0)) * 1.12;
+    const baseline = height - bottom, plotHeight = baseline - top;
+    const chart = [];
+    for (let i = 0; i <= 4; i++) {
+      const y = top + i * plotHeight / 4;
+      chart.push(`<line class="grid" x1="${left}" y1="${y}" x2="${width - right}" y2="${y}"/>`);
+    }
+    months.forEach(({ month, value, count }, i) => {
+      const center = left + (i + 0.5) * slot;
+      const label = `${month}월`;
+      const tip = count ? `${label} 평균 ${format(value)}명 · 관측 ${count}개월` : `${label} · 관측 없음`;
+      const h = (value ?? 0) / max * plotHeight;
+      const bar = count
+        ? `<rect class="bar monthbar" x="${center - barWidth / 2}" y="${baseline - h}" width="${barWidth}" height="${h}" rx="3"/>`
+        : '';
+      const missingOrZero = !value
+        ? `<text class="value-label" x="${center}" y="${baseline - 4}" text-anchor="middle">${count ? '0' : '자료 없음'}</text>` : '';
+      chart.push(`<g ${markAttributes(tip)}><rect fill="transparent" x="${center - slot / 2}" y="${top}" width="${slot}" height="${plotHeight + 30}"/>
+        ${bar}${missingOrZero}<text class="label" x="${center}" y="${height - 24}" text-anchor="middle">${label}</text></g>`);
+    });
+    mountChart(find('monthChart'), `${labels[key]} 달력 월별 평균`, width, height, chart.join(''));
+  }
+
+  function renderOffense(year) {
+    const { available, row, message } = core.summarizeOffense(offense, year);
+    const container = find('offenseChart');
+    find('offenseNote').textContent = message;
+    if (!available || row.total === 0) {
+      container.textContent = available ? '합계가 0명이어서 구성비를 계산할 수 없습니다.' : '유형별 자료 없음';
+      return;
+    }
+    const chart = [];
+    let x = 20;
+    core.OFFENSE_KEYS.forEach((key, i) => {
+      const value = row[key], share = value / row.total, segmentWidth = share * 600;
+      const color = `hsl(${210 + i * 23} 65% ${48 + i * 3}%)`;
+      const label = offenseLabels[i], percent = `${(share * 100).toFixed(1)}%`;
+      const tip = `${label} ${format(value)}명 · ${percent}`;
+      const legendX = 25 + (i % 4) * 150, legendY = 188 + Math.floor(i / 4) * 27;
+      chart.push(`<g ${markAttributes(tip)}>
+        <rect class="segment" x="${x}" y="75" width="${segmentWidth}" height="70" fill="${color}"/>
+        <rect x="${legendX}" y="${legendY - 10}" width="12" height="12" fill="${color}"/>
+        <text class="label" x="${legendX + 18}" y="${legendY}">${label} ${percent}</text></g>`);
+      x += segmentWidth;
+    });
+    mountChart(container, `${year}년 범죄 유형 구성비`, 640, 260, chart.join(''));
+  }
+
+  function renderMonthly(rows, key) {
+    const values = rows.map((row) => row[key]);
+    const average = format(core.mean(values));
+    const top = [...rows].sort((a, b) => b[key] - a[key]).slice(0, 5);
+    const peak = top[0];
+    find('kPeriod').textContent = `${rows[0].date} ~ ${rows.at(-1).date}`;
+    find('kCount').textContent = `${rows.length}개월`;
+    find('kAvg').textContent = `${average}명`;
+    find('kMax').textContent = `${peak.date} · ${format(peak[key])}명`;
+    find('seriesDesc').textContent = `${labels[key]} · 선택 기간 ${rows.length}개월`;
+    lineChart(rows, key);
+    monthChart(rows, key);
+    const tableRows = top.map((row, i) => `<tr><td>${i + 1}</td><td>${row.date}</td><td>${format(row[key])}명</td></tr>`);
+    find('topTable').innerHTML = `<table class="table"><thead><tr><th scope="col">순위</th><th scope="col">월</th><th scope="col">${labels[key]}</th></tr></thead><tbody>${tableRows.join('')}</tbody></table>`;
+    let change = '시작 월 값이 0명이어서 증감률을 계산할 수 없습니다.';
+    if (rows.length === 1) {
+      change = '한 달을 선택했습니다.';
+    } else if (values[0] > 0) {
+      const pct = 100 * (values.at(-1) - values[0]) / values[0];
+      change = `시작 월 대비 종료 월은 ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%입니다.`;
+    }
+    find('interpretation').textContent = `현재 선택 구간의 ${labels[key]} 월평균은 ${average}명입니다. ${change} 최고 월은 ${peak.date}입니다. 이 변화는 관찰값이며 특정 사건이나 정책의 직접 효과로 단정하지 않습니다.`;
+  }
+
+  function render(state) {
+    const range = core.normalizeRange(dates, state.start, state.end);
+    start.value = range.start;
+    end.value = range.end;
+    preset.value = core.matchingPreset(ranges, range.start, range.end);
+    series.value = state.type;
+    maToggle.checked = state.ma;
+    offenseYear.value = state.year;
+    hideTip();
+    renderMonthly(data.slice(range.startIndex, range.endIndex + 1), state.type);
+    renderOffense(state.year);
+    window.DrugTrendComparison.render(data, state.type, labels[state.type]);
+
+    const url = core.writeFilters(location.href, { ...state, start: range.start, end: range.end }, defaults);
+    if (url.href !== location.href) history.replaceState(history.state, '', url);
+  }
+
+  function renderControls() {
+    render({ start: start.value, end: end.value, type: series.value, ma: maToggle.checked, year: Number(offenseYear.value) });
+  }
+
+  preset.addEventListener('change', () => {
+    [start.value, end.value] = ranges[preset.value];
+    renderControls();
+  });
+  [start, end, series, maToggle, offenseYear].forEach((el) => el.addEventListener('change', renderControls));
+  find('reset').addEventListener('click', () => render(defaults));
+  find('downloadCsv').addEventListener('click', () => {
+    const range = core.normalizeRange(dates, start.value, end.value);
+    const rows = data.slice(range.startIndex, range.endIndex + 1);
+    const href = URL.createObjectURL(new Blob([core.serializeMonthlyCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `monthly_drug_offenders_${range.start}_${range.end}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+  });
+
+  const renderUrl = () => render(core.readFilters(new URL(location.href), dates, years));
+  window.addEventListener('popstate', renderUrl);
+  renderUrl();
 })();

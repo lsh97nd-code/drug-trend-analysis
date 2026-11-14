@@ -2,7 +2,9 @@
 
 ## 1. 저장소 이름
 
-권장 Repository 이름: `drug-trend-analysis`
+Repository 이름: `drug-trend-analysis`
+
+현재 저장소: https://github.com/lsh97nd-code/drug-trend-analysis
 
 GitHub Pages를 무료로 사용하려면 GitHub Free 기준 저장소를 `Public`으로 생성합니다.
 
@@ -24,32 +26,27 @@ git config --global user.email "GitHub 계정에서 확인 가능한 이메일"
 
 > `user.name`은 Git 커밋 작성자 이름이며 GitHub 로그인 아이디와 반드시 같을 필요는 없습니다.
 
-## 3. VS Code Source Control에서 Git 시작
+## 3. 현재 변경 검증
 
-1. VS Code 왼쪽 `소스 제어` 아이콘을 클릭합니다.
-2. `Initialize Repository` 또는 `리포지토리 초기화`를 클릭합니다.
-3. 변경 파일 전체를 확인합니다.
-4. 첫 Commit message로 다음을 권장합니다.
+현재 저장소는 이미 초기화되어 있으므로 변경 파일과 테스트를 확인합니다.
 
-```text
-Initial commit: drug trend analysis project
+```powershell
+git status --short
+python -m unittest discover -s tests -p "test_*.py"
+node --test
 ```
 
-5. `Commit`을 실행합니다.
+검증 후 커밋합니다.
 
-## 4. GitHub Repository 생성 + 업로드
-
-1. Source Control 상단의 `Publish to GitHub`를 클릭합니다.
-2. GitHub 로그인 창이 뜨면 본인 계정으로 로그인합니다.
-3. Repository 이름: `drug-trend-analysis`
-4. Visibility: `Public`
-5. 프로젝트 전체 파일을 선택하여 Publish합니다.
-
-업로드 후 저장소 주소는 일반적으로 다음 형식입니다.
-
-```text
-https://github.com/<GitHub-username>/drug-trend-analysis
+```powershell
+git add --all
+git commit -m "Improve validation dashboard and project documentation"
+git push origin main
 ```
+
+## 4. GitHub Repository 확인
+
+push 후 https://github.com/lsh97nd-code/drug-trend-analysis 에서 커밋과 파일을 확인합니다.
 
 ## 5. GitHub Pages 배포
 
@@ -66,21 +63,21 @@ GitHub 저장소 웹페이지에서:
 배포 URL은 일반적으로 다음 형식입니다.
 
 ```text
-https://<GitHub-username>.github.io/drug-trend-analysis/
+https://lsh97nd-code.github.io/drug-trend-analysis/
 ```
 
 배포 반영에는 몇 분 정도 걸릴 수 있습니다.
 
 ## 6. README.md에 실제 URL 입력
 
-README.md 마지막 `## 13. 프로젝트 URL`의 두 줄을 실제 주소로 바꿉니다.
+README.md에는 실제 저장소 주소가 기록되어 있습니다. Pages 설정이 완료되면 Dashboard URL만 갱신합니다.
 
 ```markdown
-- GitHub 저장소: `https://github.com/<GitHub-username>/drug-trend-analysis`
-- Dashboard URL: `https://<GitHub-username>.github.io/drug-trend-analysis/`
+- GitHub 저장소: https://github.com/lsh97nd-code/drug-trend-analysis
+- Dashboard URL: https://lsh97nd-code.github.io/drug-trend-analysis/
 ```
 
-수정 후 두 번째 커밋을 권장합니다.
+현재 GitHub Pages API에서는 사이트가 설정되지 않은 상태로 확인되었습니다. Pages 설정과 배포 성공을 확인한 후 URL을 완료 처리합니다.
 
 ```text
 Add GitHub Pages deployment URL

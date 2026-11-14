@@ -5,7 +5,11 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 OUT_DIR = BASE_DIR / "data" / "processed"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+YEARS = range(2017, 2026)
+DRUG_TYPES = ("cannabis", "narcotics", "psychotropics")
+OFFENSE_TYPES = (
+    "manufacture", "smuggling", "dealing", "illegal_cultivation", "use", "possession", "other",
+)
 
 # Verified from the monthly tables in each December report.
 # 2018-12 type values (cannabis/narcotics/psychotropics) were derived from
@@ -88,17 +92,68 @@ YEARLY_OFFENSE = {
 }
 
 
-def write_monthly() -> Path:
+def validate_count(value: int, label: str) -> None:
+    if type(value) is not int or value < 0:
+        raise ValueError(f"{label}: expected a nonnegative integer, got {value!r}")
+
+
+def validate_source_tables() -> None:
+    for name, table in (
+        ("monthly", MONTHLY),
+        ("published annual total", PUBLISHED_ANNUAL_TOTAL),
+        ("yearly offense", YEARLY_OFFENSE),
+    ):
+        if set(table) != set(YEARS) or any(type(year) is not int for year in table):
+            raise ValueError(f"{name}: expected years 2017–2025, got {list(table)!r}")
+
+    for year in YEARS:
+        published = PUBLISHED_ANNUAL_TOTAL[year]
+        validate_count(published, f"{year} published annual total")
+        series = MONTHLY[year]
+        if not isinstance(series, dict) or set(series) != {"total", *DRUG_TYPES}:
+            raise ValueError(f"{year}: expected monthly total, cannabis, narcotics and psychotropics")
+        for field, values in series.items():
+            if not isinstance(values, (list, tuple)) or len(values) != 12:
+                raise ValueError(f"{year} {field}: expected 12 monthly counts")
+            for month, value in enumerate(values, start=1):
+                validate_count(value, f"{year}-{month:02d} {field}")
+        for index, total in enumerate(series["total"]):
+            component_sum = sum(series[field][index] for field in DRUG_TYPES)
+            if total != component_sum:
+                raise ValueError(f"{year}-{index + 1:02d}: drug types sum to {component_sum}, total is {total}")
+
+        delta = sum(series["total"]) - published
+        expected_delta = 2 if year == 2019 else 0
+        if delta != expected_delta:
+            raise ValueError(f"{year}: monthly sum minus published total is {delta:+d}, expected {expected_delta:+d}")
+
+        values = YEARLY_OFFENSE[year]
+        if not isinstance(values, (list, tuple)) or len(values) != len(OFFENSE_TYPES) + 1:
+            raise ValueError(f"{year}: expected seven offense counts and an annual total")
+        *counts, total = values
+        validate_count(total, f"{year} offense total")
+        if total != published:
+            raise ValueError(f"{year}: offense total {total} differs from published total {published}")
+        if year == 2018:
+            if any(value is not None for value in counts):
+                raise ValueError("2018: all seven unpublished offense counts must be blank")
+        else:
+            for field, value in zip(OFFENSE_TYPES, counts):
+                validate_count(value, f"{year} offense {field}")
+            if sum(counts) != total:
+                raise ValueError(f"{year}: offense counts sum to {sum(counts)}, total is {total}")
+
+
+def write_monthly(out_dir: Path = OUT_DIR) -> Path:
+    validate_source_tables()
     rows = []
-    for year in range(2017, 2026):
+    for year in YEARS:
         d = MONTHLY[year]
         for idx in range(12):
             c = d["cannabis"][idx]
             n = d["narcotics"][idx]
             p = d["psychotropics"][idx]
             total = d["total"][idx]
-            if c + n + p != total:
-                raise ValueError(f"Monthly sum mismatch: {year}-{idx+1:02d}")
             rows.append({
                 "date": f"{year}-{idx+1:02d}",
                 "year": year,
@@ -109,7 +164,8 @@ def write_monthly() -> Path:
                 "psychotropics": p,
             })
 
-    out = OUT_DIR / "monthly_drug_offenders_2017_2025.csv"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / "monthly_drug_offenders_2017_2025.csv"
     with out.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=rows[0].keys())
         writer.writeheader()
@@ -117,19 +173,16 @@ def write_monthly() -> Path:
     return out
 
 
-def write_offense() -> Path:
-    out = OUT_DIR / "yearly_offense_type_2017_2025.csv"
-    fields = [
-        "year", "manufacture", "smuggling", "dealing", "illegal_cultivation",
-        "use", "possession", "other", "total", "source_note",
-    ]
+def write_offense(out_dir: Path = OUT_DIR) -> Path:
+    validate_source_tables()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / "yearly_offense_type_2017_2025.csv"
+    fields = ["year", *OFFENSE_TYPES, "total", "source_note"]
     with out.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
-        for year, values in YEARLY_OFFENSE.items():
-            *types, total = values
-            if year != 2018 and sum(types) != total:
-                raise ValueError(f"Offense-type sum mismatch: {year}")
+        for year in YEARS:
+            *types, total = YEARLY_OFFENSE[year]
             note = (
                 "2018 December source repeats Jan-Nov cumulative offense-type values; "
                 "breakdown left blank pending corrected source."
@@ -138,13 +191,7 @@ def write_offense() -> Path:
             )
             writer.writerow({
                 "year": year,
-                "manufacture": types[0],
-                "smuggling": types[1],
-                "dealing": types[2],
-                "illegal_cultivation": types[3],
-                "use": types[4],
-                "possession": types[5],
-                "other": types[6],
+                **dict(zip(OFFENSE_TYPES, types)),
                 "total": total,
                 "source_note": note,
             })
@@ -153,7 +200,7 @@ def write_offense() -> Path:
 
 def print_audit() -> None:
     print("[Annual reconciliation]")
-    for year in range(2017, 2026):
+    for year in YEARS:
         monthly_sum = sum(MONTHLY[year]["total"])
         published = PUBLISHED_ANNUAL_TOTAL[year]
         delta = monthly_sum - published

@@ -16,7 +16,9 @@
     <div class="badge">108개월</div>
   </header>
 
-  <main>
+  <p id="loadError" class="load-error" role="alert" hidden>통계 데이터를 불러올 수 없습니다. data.js 파일을 확인한 후 페이지를 새로 고쳐 주세요.</p>
+  <noscript><p class="load-error">대시보드를 사용하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
+  <main id="dashboardContent">
     <section class="panel controls">
       <div class="control">
         <label for="preset">기간 빠른 선택</label>
@@ -25,6 +27,7 @@
           <option value="pre">코로나 이전 2017~2019</option>
           <option value="covid">유행·제약 2020~2022</option>
           <option value="post">이후 2023~2025</option>
+          <option value="custom" disabled>직접 선택한 기간</option>
         </select>
       </div>
       <div class="control"><label for="start">시작 월</label><select id="start"></select></div>
@@ -39,7 +42,10 @@
         </select>
       </div>
       <label class="check"><input id="maToggle" type="checkbox" checked /> 12개월 이동평균 표시</label>
-      <button id="reset" type="button">초기화</button>
+      <div class="actions">
+        <button id="downloadCsv" type="button">선택 기간 CSV 다운로드</button>
+        <button id="reset" type="button">초기화</button>
+      </div>
     </section>
 
     <section class="kpis">
@@ -51,7 +57,7 @@
 
     <section class="grid2">
       <article class="panel chart-panel">
-        <div class="section-head"><div><h2>월별 추이</h2><p id="seriesDesc"></p></div><span class="hint">마우스를 올리면 값 표시</span></div>
+        <div class="section-head"><div><h2>월별 추이</h2><p id="seriesDesc"></p></div><span class="hint" id="chartHelp">차트에 마우스를 올리거나 Tab으로 들어간 뒤 좌우 방향키로 값을 확인하세요.</span></div>
         <div id="lineChart" class="chart"></div>
       </article>
       <article class="panel chart-panel">
@@ -66,10 +72,25 @@
         <div id="topTable"></div>
       </article>
       <article class="panel">
-        <div class="section-head"><div><h2>범죄 유형 구성</h2><p>연간 자료가 있는 가장 최근 연도 표시</p></div><select id="offenseYear"></select></div>
+        <div class="section-head"><div><h2>범죄 유형 구성</h2><p>선택한 연도의 범죄 유형별 비율</p></div><select id="offenseYear" aria-label="범죄 유형 통계 연도"></select></div>
         <div id="offenseChart" class="chart compact"></div>
         <p id="offenseNote" class="note"></p>
       </article>
+    </section>
+
+    <section class="panel comparison" aria-labelledby="comparisonHeading">
+      <div class="section-head">
+        <div><h2 id="comparisonHeading">특별수사본부 출범 전후, 월평균 단속인원은 어떻게 달라졌을까?</h2>
+        <p>특별수사본부는 2023년 4월 10일 구성됐습니다. 4월에는 출범 전후가 섞여 있어 제외했습니다. 기간 필터와 별개로, 선택한 지표의 직전·직후 12개월을 비교합니다. <a href="https://www.spo.go.kr/common/board/Download.do?bcIdx=1036561&amp;cbIdx=1403&amp;streFileNm=863a3bdd-3757-4032-8c2a-06c96091c9a9.pdf">정부 합동 보도자료(PDF)</a></p></div>
+      </div>
+      <p id="comparisonMetric"></p>
+      <dl class="comparison-values" id="comparisonValues">
+        <div><dt>출범 전 · 2022.04 ~ 2023.03</dt><dd id="beforeMean"></dd></div>
+        <div><dt>출범 후 · 2023.05 ~ 2024.04</dt><dd id="afterMean"></dd></div>
+        <div><dt>전후 월평균 증감률</dt><dd id="changeRate"></dd></div>
+      </dl>
+      <p id="summerComparison"></p>
+      <p class="note">월별 자료는 적발된 마약류사범을 집계합니다. 특수본의 효과를 추정하려면 기존 단속 추세와 수사 활동의 변화를 함께 살펴야 합니다. 휴가철 해외여행과 투약의 관련성을 검토하려면 월별 출국자 수와 투약 적발 자료가 추가로 필요합니다.</p>
     </section>
 
     <section class="panel interpretation">
@@ -80,8 +101,10 @@
   </main>
 
   <footer>공공기관 통계 기반 학습용 분석 Dashboard · 투자/의료 조언 목적 아님</footer>
-  <div id="tooltip" class="tooltip" hidden></div>
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
   <script src="./data.js"></script>
+  <script src="./core.js"></script>
+  <script src="./comparison.js"></script>
   <script src="./script.js"></script>
 </body>
 </html>
