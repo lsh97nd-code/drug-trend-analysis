@@ -162,12 +162,80 @@
     });
   }
 
+  function yearOverYear(data, key, options = {}) {
+    if (!SERIES_KEYS.includes(key)) {
+      throw new Error(`지원하지 않는 분석 지표입니다: ${key}`);
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error('전년 동월 대비 계산에는 월별 데이터가 필요합니다.');
+    }
+    const dates = data.map((row) => row.date);
+    const start = options.start ?? dates[0];
+    const end = options.end ?? dates.at(-1);
+    const range = normalizeRange(dates, start, end);
+    const byMonth = new Map(data.map((row) => [parseMonthIndex(row.date), row]));
+
+    return data.slice(range.startIndex, range.endIndex + 1).map((row) => {
+      const previousRow = byMonth.get(parseMonthIndex(row.date) - 12);
+      const current = row[key];
+      if (!previousRow) {
+        return {
+          date: row.date,
+          current,
+          previous: null,
+          changePct: null,
+          reason: 'missing-base',
+        };
+      }
+      const previous = previousRow[key];
+      if (previous === 0) {
+        return {
+          date: row.date,
+          current,
+          previous,
+          changePct: null,
+          reason: 'zero-base',
+        };
+      }
+      return {
+        date: row.date,
+        current,
+        previous,
+        changePct: (current - previous) / previous * 100,
+        reason: null,
+      };
+    });
+  }
+
+  function formatPresetPeriod(start, end) {
+    const wholeYears = start.endsWith('-01') && end.endsWith('-12');
+    const from = wholeYears ? start.slice(0, 4) : start.replace('-', '.');
+    const to = wholeYears ? end.slice(0, 4) : end.replace('-', '.');
+    return `${from}~${to}`;
+  }
+
+  function presetLabel(name, range) {
+    if (!Array.isArray(range) || range.length !== 2) {
+      throw new Error('프리셋 기간은 시작 월과 종료 월이어야 합니다.');
+    }
+    const prefix = {
+      all: '전체',
+      pre: '코로나 이전',
+      covid: '유행·제약',
+      post: '이후',
+    }[name];
+    if (!prefix) {
+      throw new Error(`지원하지 않는 기간 프리셋입니다: ${name}`);
+    }
+    return `${prefix} ${formatPresetPeriod(range[0], range[1])}`;
+  }
+
   function presetRanges(dates) {
     const ranges = {
       all: [dates[0], dates.at(-1)],
       pre: ['2017-01', '2019-12'],
       covid: ['2020-01', '2022-12'],
-      post: ['2023-01', '2025-12'],
+      post: ['2023-01', dates.at(-1)],
     };
     return Object.fromEntries(Object.entries(ranges).filter(
       ([, [start, end]]) => dates.includes(start) && dates.includes(end)
@@ -269,6 +337,24 @@
     return `\uFEFF${lines.join('\r\n')}\r\n`;
   }
 
+  function serializeMonthlyJson(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new Error('JSON으로 내보낼 월별 데이터가 필요합니다.');
+    }
+    const fields = ['date', 'year', 'month', ...SERIES_KEYS];
+    const selected = rows.map((row) => Object.fromEntries(
+      fields.map((field) => [field, row[field]])
+    ));
+    return JSON.stringify({
+      schemaVersion: 1,
+      source: '대검찰청 월별 통계 기반 가공 데이터',
+      period: { start: rows[0].date, end: rows.at(-1).date },
+      rowCount: rows.length,
+      fields,
+      data: selected,
+    }, null, 2) + '\n';
+  }
+
   return Object.freeze({
     OFFENSE_KEYS,
     SERIES_KEYS,
@@ -277,13 +363,16 @@
     movingAverage,
     normalizeRange,
     parseMonthIndex,
+    presetLabel,
     presetRanges,
     matchingPreset,
     readFilters,
     serializeMonthlyCsv,
+    serializeMonthlyJson,
     summarizeOffense,
     validateMonthlyData,
     validateOffenseData,
     writeFilters,
+    yearOverYear,
   });
 });

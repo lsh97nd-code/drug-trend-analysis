@@ -4,6 +4,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>마약류사범 데이터 탐색 Dashboard</title>
+  <script>
+    (() => {
+      try {
+        const saved = localStorage.getItem('drug-trend-theme');
+        const theme = saved === 'dark' || saved === 'light'
+          ? saved
+          : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+      } catch (_) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -11,9 +24,12 @@
     <div>
       <p class="eyebrow">AI 데이터 분석 · 보너스 Dashboard</p>
       <h1>국내 마약류사범 단속 추이 탐색</h1>
-      <p class="sub">2017.01~2025.12 · 대검찰청 월별 통계 기반 · 기간과 지표를 바꿔가며 탐색</p>
+      <p id="dataCoverage" class="sub">데이터 범위를 확인하는 중입니다. · 대검찰청 월별 통계 기반</p>
     </div>
-    <div class="badge">108개월</div>
+    <div class="hero-tools">
+      <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false">다크 모드</button>
+      <div id="recordBadge" class="badge" title="월별 데이터 건수">-개월</div>
+    </div>
   </header>
 
   <p id="loadError" class="load-error" role="alert" hidden>통계 데이터를 불러올 수 없습니다. data.js 파일을 확인한 후 페이지를 새로 고쳐 주세요.</p>
@@ -23,10 +39,10 @@
       <div class="control">
         <label for="preset">기간 빠른 선택</label>
         <select id="preset">
-          <option value="all">전체 2017~2025</option>
+          <option value="all">전체</option>
           <option value="pre">코로나 이전 2017~2019</option>
           <option value="covid">유행·제약 2020~2022</option>
-          <option value="post">이후 2023~2025</option>
+          <option value="post">이후</option>
           <option value="custom" disabled>직접 선택한 기간</option>
         </select>
       </div>
@@ -44,6 +60,7 @@
       <label class="check"><input id="maToggle" type="checkbox" checked /> 12개월 이동평균 표시</label>
       <div class="actions">
         <button id="downloadCsv" type="button">선택 기간 CSV 다운로드</button>
+        <button id="downloadJson" type="button">선택 기간 JSON 다운로드</button>
         <button id="reset" type="button">초기화</button>
       </div>
     </section>
@@ -64,6 +81,18 @@
         <div class="section-head"><div><h2>달력 월별 평균</h2><p>선택 기간 안에서 1~12월 평균 비교</p></div></div>
         <div id="monthChart" class="chart compact"></div>
       </article>
+    </section>
+
+    <section class="panel chart-panel yoy-panel" aria-labelledby="yoyHeading">
+      <div class="section-head">
+        <div>
+          <h2 id="yoyHeading">전년 동월 대비</h2>
+          <p id="yoyDesc">각 월을 12개월 전 같은 달과 비교</p>
+        </div>
+        <span class="hint">0% 위는 증가, 아래는 감소를 뜻합니다.</span>
+      </div>
+      <div id="yoyChart" class="chart compact"></div>
+      <p id="yoyNote" class="note" aria-live="polite"></p>
     </section>
 
     <section class="grid2">

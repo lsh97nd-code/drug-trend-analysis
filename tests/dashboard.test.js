@@ -56,6 +56,28 @@ test('moving average starts only after 12 observations', () => {
   assert.deepEqual(core.movingAverage([0]), [null]);
 });
 
+test('year-over-year compares selected months against the full data history', () => {
+  const [point] = core.yearOverYear(monthly, 'total', { start: '2018-01', end: '2018-01' });
+  assert.equal(point.date, '2018-01');
+  assert.equal(point.previous, monthly[0].total);
+  assert.equal(point.current, monthly[12].total);
+  assert.equal(point.changePct, (point.current - point.previous) / point.previous * 100);
+  assert.equal(point.reason, null);
+
+  const firstYear = core.yearOverYear(monthly, 'total', { start: '2017-01', end: '2017-12' });
+  assert.equal(firstYear.length, 12);
+  assert.ok(firstYear.every((item) => item.changePct === null && item.reason === 'missing-base'));
+
+  const synthetic = [
+    { date: '2025-01', total: 0 },
+    { date: '2026-01', total: 4 },
+  ];
+  assert.deepEqual(core.yearOverYear(synthetic, 'total', { start: '2026-01', end: '2026-01' }), [{
+    date: '2026-01', current: 4, previous: 0, changePct: null, reason: 'zero-base',
+  }]);
+  assert.throws(() => core.yearOverYear(monthly, 'unknown'), /지원하지 않는/);
+});
+
 test('2018 offense message always uses its own year, total and missing-data explanation', () => {
   const missing = core.summarizeOffense(offense, '2018');
   assert.equal(missing.available, false);
@@ -81,6 +103,30 @@ test('preset links and old start/end/type links share the same filter state', ()
   const legacy = core.readFilters(new URL('https://example.org/?end=2019-12&type=narcotics'), dates, years);
   assert.deepEqual(preset, legacy);
   assert.deepEqual(core.readFilters(new URL('https://example.org/?preset=toString&type=constructor&year=2099&start=1999-08'), dates, years), defaults);
+});
+
+test('presets and labels extend through newly appended complete years', () => {
+  const futureDates = [...dates];
+  for (let year = 2026; year <= 2027; year++) {
+    for (let month = 1; month <= 12; month++) {
+      futureDates.push(`${year}-${String(month).padStart(2, '0')}`);
+    }
+  }
+  const ranges = core.presetRanges(futureDates);
+  assert.deepEqual(ranges.all, ['2017-01', '2027-12']);
+  assert.deepEqual(ranges.post, ['2023-01', '2027-12']);
+  assert.equal(core.presetLabel('all', ranges.all), '전체 2017~2027');
+  assert.equal(core.presetLabel('post', ranges.post), '이후 2023~2027');
+  assert.deepEqual(
+    core.readFilters(new URL('https://example.org/?preset=post'), futureDates, [...years, 2026, 2027]),
+    { start: '2023-01', end: '2027-12', type: 'total', ma: true, year: 2027 },
+  );
+});
+
+test('preset labels retain months for a partial terminal year', () => {
+  const range = ['2023-01', '2027-06'];
+  assert.equal(core.presetLabel('post', range), '이후 2023.01~2027.06');
+  assert.throws(() => core.presetLabel('custom', range), /지원하지 않는/);
 });
 
 test('URL update and reset preserve other query parameters and anchors', () => {
@@ -109,6 +155,19 @@ test('CSV contains exactly the selected rows and all seven processed columns', (
   const [header, ...lines] = csv.slice(1).trimEnd().split('\r\n');
   assert.equal(header, 'date,year,month,total,cannabis,narcotics,psychotropics');
   assert.deepEqual(lines, Array.from(rows, (row) => header.split(',').map((key) => '"' + row[key] + '"').join(',')));
+});
+
+test('JSON contains selection metadata and exactly seven processed fields', () => {
+  const rows = monthly.slice(4, 6);
+  const payload = JSON.parse(core.serializeMonthlyJson(rows));
+  assert.equal(payload.schemaVersion, 1);
+  assert.deepEqual(payload.period, { start: rows[0].date, end: rows[1].date });
+  assert.equal(payload.rowCount, 2);
+  assert.deepEqual(payload.fields, ['date', 'year', 'month', 'total', 'cannabis', 'narcotics', 'psychotropics']);
+  assert.deepEqual(payload.data, Array.from(rows, (row) => Object.fromEntries(
+    payload.fields.map((field) => [field, row[field]])
+  )));
+  assert.throws(() => core.serializeMonthlyJson([]), /필요합니다/);
 });
 
 test('missing or invalid data hides the dashboard and exposes the load error', () => {

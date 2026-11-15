@@ -40,6 +40,7 @@
       : `7·8월을 양쪽에서 빼면 나머지 10개월의 월평균 증감률은 ${pct(stats.withoutSummerRate)}입니다.`;
   }
 
-  if (typeof module === 'object' && module.exports) module.exports = { summarize };
-  if (typeof window !== 'undefined') window.DrugTrendComparison = { render };
+  const api = Object.freeze({ summarize, render });
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (typeof window !== 'undefined') window.DrugTrendComparison = api;
 })();

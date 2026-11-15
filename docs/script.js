@@ -29,13 +29,43 @@
   const start = find('start'), end = find('end'), preset = find('preset');
   const series = find('series'), maToggle = find('maToggle'), offenseYear = find('offenseYear');
   const tooltip = find('tooltip');
+  const themeToggle = find('themeToggle');
+
+  function applyTheme(theme, persist = false) {
+    const next = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    themeToggle.setAttribute('aria-pressed', String(next === 'dark'));
+    themeToggle.setAttribute('aria-label', `${next === 'dark' ? '라이트' : '다크'} 모드로 전환`);
+    themeToggle.textContent = `${next === 'dark' ? '라이트' : '다크'} 모드`;
+    if (persist) {
+      try {
+        localStorage.setItem('drug-trend-theme', next);
+      } catch (_) {}
+    }
+  }
+
+  applyTheme(document.documentElement.dataset.theme);
+  themeToggle.addEventListener('click', () => {
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true);
+  });
+
+  const displayMonth = (value) => value.replace('-', '.');
+  find('dataCoverage').textContent =
+    `${displayMonth(dates[0])}~${displayMonth(dates.at(-1))} · ` +
+    '대검찰청 월별 통계 기반 · 기간과 지표를 바꿔가며 탐색';
+  find('recordBadge').textContent = `${dates.length}개월`;
+  find('recordBadge').title = `최신 월별 데이터: ${dates.at(-1)}`;
 
   for (const date of dates) {
     start.add(new Option(date, date));
     end.add(new Option(date, date));
   }
   for (const year of years) offenseYear.add(new Option(year, year));
-  for (const option of preset.options) option.disabled = !Object.hasOwn(ranges, option.value);
+  for (const option of preset.options) {
+    const range = ranges[option.value];
+    option.disabled = !range;
+    if (range) option.textContent = core.presetLabel(option.value, range);
+  }
 
   function hideTip() {
     tooltip.hidden = true;
@@ -145,6 +175,58 @@
     mountChart(find('monthChart'), `${labels[key]} 달력 월별 평균`, width, height, chart.join(''));
   }
 
+  function yoyChart(startDate, endDate, key) {
+    const points = core.yearOverYear(data, key, { start: startDate, end: endDate });
+    const valid = points.filter((point) => point.changePct !== null);
+    const container = find('yoyChart');
+    find('yoyDesc').textContent = `${labels[key]} · ${startDate}~${endDate}의 각 월을 12개월 전 같은 달과 비교`;
+
+    const missingCount = points.filter((point) => point.reason === 'missing-base').length;
+    const zeroCount = points.filter((point) => point.reason === 'zero-base').length;
+    const exclusions = [];
+    if (missingCount) exclusions.push(`전년 자료가 없는 ${missingCount}개월`);
+    if (zeroCount) exclusions.push(`전년 값이 0인 ${zeroCount}개월`);
+    find('yoyNote').textContent = exclusions.length
+      ? `${exclusions.join(', ')}은 증감률 계산에서 제외했습니다.`
+      : '선택한 모든 월에 비교 가능한 전년 동월 자료가 있습니다.';
+
+    if (valid.length === 0) {
+      container.innerHTML = '<p class="empty-chart">비교 가능한 전년 동월 자료가 없습니다. 2018년 이후 월을 포함해 보세요.</p>';
+      return;
+    }
+
+    const width = 900, height = 310, left = 58, right = 24, top = 22, bottom = 46;
+    const plotWidth = width - left - right, plotHeight = height - top - bottom;
+    const baseline = top + plotHeight / 2;
+    const maxAbs = Math.max(1, ...valid.map((point) => Math.abs(point.changePct))) * 1.08;
+    const slot = plotWidth / points.length;
+    const barWidth = Math.max(2, Math.min(18, slot * 0.72));
+    const chart = [];
+
+    for (const [rate, y] of [[maxAbs, top], [0, baseline], [-maxAbs, top + plotHeight]]) {
+      chart.push(`<line class="${rate === 0 ? 'axis' : 'grid'}" x1="${left}" y1="${y}" x2="${width - right}" y2="${y}"/>
+        <text class="label" x="${left - 8}" y="${y + 4}" text-anchor="end">${rate.toFixed(1)}%</text>`);
+    }
+
+    points.forEach((point, index) => {
+      if (point.changePct === null) return;
+      const center = left + (index + 0.5) * slot;
+      const rawHeight = Math.abs(point.changePct) / maxAbs * (plotHeight / 2);
+      const barHeight = Math.max(2, rawHeight);
+      const y = point.changePct >= 0 ? baseline - barHeight : baseline;
+      const signedRate = `${point.changePct >= 0 ? '+' : ''}${point.changePct.toFixed(1)}%`;
+      const tip = `${point.date} · 전년 동월 대비 ${signedRate} (${format(point.previous)}명 → ${format(point.current)}명)`;
+      chart.push(`<rect class="yoy-bar ${point.changePct >= 0 ? 'positive' : 'negative'}" ${markAttributes(tip)}
+        x="${center - barWidth / 2}" y="${y}" width="${barWidth}" height="${barHeight}" rx="2"/>`);
+    });
+
+    for (const index of new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])) {
+      const center = left + (index + 0.5) * slot;
+      chart.push(`<text class="label" x="${center}" y="${height - 14}" text-anchor="middle">${points[index].date}</text>`);
+    }
+    mountChart(container, `${labels[key]} 전년 동월 대비 증감률`, width, height, chart.join(''));
+  }
+
   function renderOffense(year) {
     const { available, row, message } = core.summarizeOffense(offense, year);
     const container = find('offenseChart');
@@ -182,6 +264,7 @@
     find('seriesDesc').textContent = `${labels[key]} · 선택 기간 ${rows.length}개월`;
     lineChart(rows, key);
     monthChart(rows, key);
+    yoyChart(rows[0].date, rows.at(-1).date, key);
     const tableRows = top.map((row, i) => `<tr><td>${i + 1}</td><td>${row.date}</td><td>${format(row[key])}명</td></tr>`);
     find('topTable').innerHTML = `<table class="table"><thead><tr><th scope="col">순위</th><th scope="col">월</th><th scope="col">${labels[key]}</th></tr></thead><tbody>${tableRows.join('')}</tbody></table>`;
     let change = '시작 월 값이 0명이어서 증감률을 계산할 수 없습니다.';
@@ -221,17 +304,37 @@
   });
   [start, end, series, maToggle, offenseYear].forEach((el) => el.addEventListener('change', renderControls));
   find('reset').addEventListener('click', () => render(defaults));
-  find('downloadCsv').addEventListener('click', () => {
-    const range = core.normalizeRange(dates, start.value, end.value);
-    const rows = data.slice(range.startIndex, range.endIndex + 1);
-    const href = URL.createObjectURL(new Blob([core.serializeMonthlyCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+  function downloadText(content, type, filename) {
+    const href = URL.createObjectURL(new Blob([content], { type }));
     const link = document.createElement('a');
     link.href = href;
-    link.download = `monthly_drug_offenders_${range.start}_${range.end}.csv`;
+    link.download = filename;
     document.body.append(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
+  }
+
+  function selectedRows() {
+    const range = core.normalizeRange(dates, start.value, end.value);
+    return { range, rows: data.slice(range.startIndex, range.endIndex + 1) };
+  }
+
+  find('downloadCsv').addEventListener('click', () => {
+    const { range, rows } = selectedRows();
+    downloadText(
+      core.serializeMonthlyCsv(rows),
+      'text/csv;charset=utf-8',
+      `monthly_drug_offenders_${range.start}_${range.end}.csv`,
+    );
+  });
+  find('downloadJson').addEventListener('click', () => {
+    const { range, rows } = selectedRows();
+    downloadText(
+      core.serializeMonthlyJson(rows),
+      'application/json;charset=utf-8',
+      `monthly_drug_offenders_${range.start}_${range.end}.json`,
+    );
   });
 
   const renderUrl = () => render(core.readFilters(new URL(location.href), dates, years));

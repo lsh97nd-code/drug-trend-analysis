@@ -46,6 +46,7 @@ drug-trend-analysis/
 ├── analysis_summary.txt
 ├── build_dataset.py
 ├── analysis.py
+├── update_dashboard_data.py # 검증된 CSV로 두 data.js를 안전하게 갱신
 ├── requirements.txt
 ├── tests/                 # Python unittest + Node node:test
 ├── output/pdf/            # 과제 안내와 제출 부록을 합친 PDF
@@ -162,7 +163,7 @@ python -m unittest discover -s tests -p "test_*.py"
 node --test
 ```
 
-현재 회귀 테스트는 Python 15개와 Node 14개, 총 29개입니다. `dashboard/`와 `docs/`의 실행 자산 동일성도 Node 테스트에서 확인합니다.
+전체 회귀 테스트와 `dashboard/`·`docs/` 실행 자산의 동일성을 함께 확인합니다.
 
 ## 6. 데이터 정제·검증 기준
 
@@ -237,53 +238,56 @@ Dashboard 구현을 완료했습니다.
 dashboard/index.html
 ```
 
-주요 기능:
+### 주요 기능
 
-- 전체 / 코로나 이전 / 유행·제약 / 이후 기간 빠른 선택
-- 시작 월·종료 월 직접 변경
-- 전체 / 향정신성의약품 / 대마 / 마약 지표 선택
-- 12개월 이동평균 표시 여부 선택
-- 선택 기간의 데이터 포인트·월평균·최고 월 자동 계산
-- 달력 월별 평균 비교
-- 현재 조건 Top 5 확인
-- 연도별 범죄 유형 구성비 확인
-- 특별수사본부 출범 전후 12개월 비교와 7·8월 제외 민감도 확인
-- 선택 기간 7개 열 CSV 다운로드
-- 필터 상태 URL 저장·복원과 초기화
-- 키보드 차트 탐색, 모바일 내부 스크롤, 데이터 로드 실패 안내
+- 전체 / 코로나 이전 / 유행·제약 / 이후 프리셋과 시작·종료 월 직접 선택
+- 전체 / 향정신성의약품 / 대마 / 마약, 12개월 이동평균, KPI·Top 5·달력 월별 평균
+- **선택 기간의 각 월을 12개월 전과 비교하는 전년 동월 대비(YoY) 차트**
+- 범죄 유형 구성비와 특별수사본부 출범 전후 12개월·7·8월 제외 민감도 비교
+- 선택 기간 7개 열 CSV 및 `schemaVersion`·기간·필드 메타데이터가 있는 JSON 다운로드
+- 데이터 기간·개월 수·`all`·`post` 프리셋을 실제 마지막 월에 맞춰 자동 갱신
+- 시스템 설정과 저장된 선택을 반영하는 라이트/다크 모드
+- URL 필터 복원, 키보드 차트 탐색, 모바일 내부 스크롤, 로드·빈 데이터 오류 안내
 
 ### 실행
 
-`dashboard/index.html`을 브라우저로 열면 됩니다. 또는 프로젝트 루트에서:
+`dashboard/index.html`을 직접 열거나 프로젝트 루트에서 다음과 같이 실행합니다.
 
 ```bash
 python -m http.server 8000
 ```
 
-이후 브라우저에서:
-
 ```text
 http://localhost:8000/dashboard/
 ```
 
+### 향후 공식 데이터 갱신
+
+2026~2027년 등의 **공식 월별 CSV와 연간 범죄 유형 CSV가 모두 확보된 후에만** 다음 명령을 사용합니다. 미발표 월이나 미래 값은 추정하여 채우지 않습니다.
+
+```bash
+python update_dashboard_data.py --monthly data/processed/monthly_drug_offenders_2017_2027.csv --offense data/processed/yearly_offense_type_2017_2027.csv
+```
+
+도구는 2017-01부터 마지막 연도 12월까지의 연속성·정수·비음수·종류별 합계·연간 합계와 범죄 유형 연도를 검증한 뒤 `dashboard/data.js`와 `docs/data.js`를 같은 내용으로 교체합니다. 입력이 잘못되거나 교체가 실패하면 기존 두 파일을 보존합니다.
+
+현재 CSV와 두 배포 자산이 일치하는지 쓰기 없이 확인하려면:
+
+```bash
+python update_dashboard_data.py --check
+```
+
+갱신 후에는 데이터 기간·개월 수·프리셋·차트·KPI·내보내기 범위가 새 마지막 월에 맞게 자동 확장됩니다.
+
 ### 필터 변경 시나리오
 
-- **시나리오 A:** 전체 기간 + 전체 단속인원 → 9년 장기 흐름 확인
-- **시나리오 B:** 2023-01~2025-12 + 전체 단속인원 → 최근 급증과 높은 수준 확인
-- **시나리오 C:** 2020-01~2022-12 + 향정신성의약품 → 유행·제약 시기의 향정 추이 확인
+- **시나리오 A:** 전체 기간 + 전체 단속인원 → 장기 흐름과 YoY 확인
+- **시나리오 B:** 2023-01~2025-12 + 전체 단속인원 → 최근 단속 수준 확인
+- **시나리오 C:** 2020-01~2022-12 + 향정신성의약품 → 유행·제약 기간 비교
 
 ### 배포 비용
 
-이 Dashboard는 정적 웹페이지이므로 **AI API, 서버, 데이터베이스가 필요하지 않습니다.** 따라서 API Key를 결제할 필요가 없습니다.
-
-GitHub Pages로 배포하려면 `docs/` 폴더를 사용하면 됩니다.
-
-1. GitHub 저장소에 전체 프로젝트를 push
-2. `Settings` → `Pages`
-3. `Build and deployment`에서 **Deploy from a branch** 선택
-4. Branch: `main`
-5. Folder: `/docs`
-6. 저장 후 생성된 URL을 README의 프로젝트 URL에 기록
+정적 웹페이지이므로 **AI API, 별도 서버, 데이터베이스가 필요하지 않습니다.** GitHub Pages에서 `main /docs`를 배포 소스로 설정할 수 있습니다.
 
 ## 10. AI 사용 투명성
 

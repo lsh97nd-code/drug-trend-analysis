@@ -71,6 +71,13 @@
 
 `analysis.py --validate-only`는 생성된 CSV의 필수 열, 날짜 형식, 정렬, 월 연속성, 중복, `date-year-month` 일치와 연간 합계를 표준 라이브러리만으로 검사한다. 검증 전용 실행은 그래프나 분석 결과 파일을 만들거나 변경하지 않는다.
 
+`update_dashboard_data.py`는 향후 공식 CSV를 반영할 때 2017-01 시작, 마지막 연도 12월 종료, 월 연속성, 수치·합계, 연간 범죄 유형 범위를 먼저 검증한다. 모든 검증을 통과한 후에만 `dashboard/data.js`와 `docs/data.js`를 동일하게 교체하며, 실패 시 기존 출력을 보존한다. 2026~2027년 미발표 값은 추정하지 않고 월별·연간 공식 자료가 완전히 확보된 후에만 반영한다.
+
+```bash
+python update_dashboard_data.py --check
+python update_dashboard_data.py --monthly <월별.csv> --offense <연간_범죄_유형.csv>
+```
+
 ## 8. 회귀 테스트와 재현성
 
 ```bash
@@ -78,8 +85,8 @@ python -m unittest discover -s tests -p "test_*.py"
 node --test
 ```
 
-- Python `unittest`: 15개 통과
-- Node `node:test`: 14개 통과
-- 총 29개 자동 테스트
+- Python `unittest`와 Node `node:test` 전체 회귀 테스트 통과 확인
+- 완전한 2026~2027 합성 픽스처로 132개월·11개 연도 확장 경로 검증
+- 불완전한 미래 자료가 입력되면 두 `data.js`가 변경되지 않음을 검증
 - 별도 임시 폴더에서 생성한 두 CSV는 저장소의 처리 CSV와 셀 단위로 일치
 - 전체 분석 실행에서 PNG 11개를 정상 디코딩하고, 분해 CSV 108행과 요약 파일의 재현성을 확인

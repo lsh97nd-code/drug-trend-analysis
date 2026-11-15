@@ -163,6 +163,37 @@ def validate(rows):
     }
 
 
+def validate_dataset(rows, offense_rows):
+    """Validate the complete monthly and annual dataset, including future years."""
+    audit = validate(rows)
+    first_year = YEARS[0]
+    last_base_year = YEARS[-1]
+    end_year = rows[-1]["year"]
+    if rows[0]["date"] != f"{first_year}-01":
+        raise ValueError(f"월별 데이터는 {first_year}-01부터 시작해야 합니다.")
+    if end_year < last_base_year or rows[-1]["date"] != f"{end_year}-12":
+        raise ValueError(
+            f"월별 데이터는 최소 {last_base_year}-12까지 포함하고 마지막 연도의 12월로 끝나야 합니다."
+        )
+
+    expected_years = list(range(first_year, end_year + 1))
+    offense_years = [row["year"] for row in offense_rows]
+    if offense_years != expected_years:
+        raise ValueError(
+            f"범죄 유형 CSV에는 {first_year}~{end_year}년이 한 번씩 오름차순으로 필요합니다."
+        )
+
+    annual_totals = defaultdict(int)
+    for row in rows:
+        annual_totals[row["year"]] += row["total"]
+    for offense in offense_rows:
+        year = offense["year"]
+        expected_gap = 2 if year == 2019 else 0
+        if annual_totals[year] - offense["total"] != expected_gap:
+            raise ValueError(f"{year}년 월별 합계와 연간 누계의 차이는 {expected_gap}명이어야 합니다.")
+    return audit
+
+
 def rolling_mean(values, window=12):
     result = [math.nan] * len(values)
     for i in range(window - 1, len(values)):
@@ -242,7 +273,7 @@ def plot_monthly(rows):
     ticks, labels = year_ticks(rows)
     fig, ax = plt.subplots(figsize=(14, 6))
     ax.plot(x, y)
-    ax.set_title("월별 마약류사범 단속 추이 (2017-2025)")
+    ax.set_title(f"월별 마약류사범 단속 추이 ({rows[0]['year']}-{rows[-1]['year']})")
     ax.set_ylabel("단속인원(명)")
     ax.set_xticks(ticks, labels)
     ax.grid(axis="y", alpha=0.25)
@@ -292,7 +323,7 @@ def plot_offense_share(offense_rows):
     ax.set_title("연간 마약류사범 범죄 유형별 구성비")
     ax.set_ylabel("구성비(%)")
     ax.set_ylim(0, 100)
-    ax.set_xticks(range(2017, 2026))
+    ax.set_xticks(range(min(r["year"] for r in offense_rows), max(r["year"] for r in offense_rows) + 1))
     ax.legend(ncol=4, loc="upper center", bbox_to_anchor=(0.5, -0.12))
     ax.text(
         2018, 50, "2018\n원자료 불일치로\n유형별 값 미사용",
@@ -309,7 +340,7 @@ def plot_period_comparison(rows):
     periods = [
         ("코로나 이전\n2017-2019", 2017, 2019),
         ("유행·제약\n2020-2022", 2020, 2022),
-        ("이후\n2023-2025", 2023, 2025),
+        (f"이후\n2023-{rows[-1]['year']}", 2023, rows[-1]["year"]),
     ]
     means = []
     for _, a, b in periods:
@@ -382,7 +413,7 @@ def plot_month_seasonality(rows):
     means = [sum(by_month[m]) / len(by_month[m]) for m in range(1, 13)]
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.bar([f"{m}월" for m in range(1, 13)], means)
-    ax.set_title("2017-2025 달력 월별 평균 단속인원")
+    ax.set_title(f"{rows[0]['year']}-{rows[-1]['year']} 달력 월별 평균 단속인원")
     ax.set_ylabel("평균 단속인원(명)")
     for bar, value in zip(bars, means):
         ax.text(
@@ -463,7 +494,7 @@ def write_summary(rows, audit, trend, seasonal_by_month, residual):
     period_defs = [
         ("코로나 이전(2017-2019)", 2017, 2019),
         ("코로나 유행·제약(2020-2022)", 2020, 2022),
-        ("코로나 이후(2023-2025)", 2023, 2025),
+        (f"코로나 이후(2023-{rows[-1]['year']})", 2023, rows[-1]["year"]),
     ]
     lines = [
         f"행 수: {audit['rows']}",
@@ -512,22 +543,10 @@ def write_summary(rows, audit, trend, seasonal_by_month, residual):
     )
 
 
-def main(validate_only=False):
-    rows = load_monthly()
-    audit = validate(rows)
-    offense_rows = load_offense()
-    if rows[0]["date"] != f"{YEARS[0]}-01" or rows[-1]["date"] != f"{YEARS[-1]}-12":
-        raise ValueError(f"월별 데이터는 {YEARS[0]}-01부터 {YEARS[-1]}-12까지 필요합니다.")
-    if [row["year"] for row in offense_rows] != list(YEARS):
-        raise ValueError(f"범죄 유형 CSV에는 {YEARS[0]}~{YEARS[-1]}년이 한 번씩 오름차순으로 필요합니다.")
-    annual_totals = defaultdict(int)
-    for row in rows:
-        annual_totals[row["year"]] += row["total"]
-    for offense in offense_rows:
-        year = offense["year"]
-        expected_gap = 2 if year == 2019 else 0
-        if annual_totals[year] - offense["total"] != expected_gap:
-            raise ValueError(f"{year}년 월별 합계와 연간 누계의 차이는 {expected_gap}명이어야 합니다.")
+def main(validate_only=False, monthly_path=None, offense_path=None):
+    rows = load_monthly(monthly_path)
+    offense_rows = load_offense(offense_path)
+    audit = validate_dataset(rows, offense_rows)
 
     print("=== 데이터 검증 ===")
     print(f"기간: {rows[0]['date']} ~ {rows[-1]['date']}")
@@ -560,10 +579,16 @@ def main(validate_only=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="2017~2025년 마약류사범 통계 분석")
+    parser = argparse.ArgumentParser(description="2017년 이후 마약류사범 통계 분석")
     parser.add_argument("--validate-only", action="store_true", help="입력 CSV만 검증합니다.")
+    parser.add_argument("--monthly", type=Path, default=MONTHLY_CSV, help="월별 CSV 경로")
+    parser.add_argument("--offense", type=Path, default=OFFENSE_CSV, help="연간 범죄 유형 CSV 경로")
     args = parser.parse_args()
     try:
-        main(validate_only=args.validate_only)
+        main(
+            validate_only=args.validate_only,
+            monthly_path=args.monthly,
+            offense_path=args.offense,
+        )
     except (ValueError, OSError, csv.Error) as error:
         parser.exit(1, f"오류: {error}\n")
